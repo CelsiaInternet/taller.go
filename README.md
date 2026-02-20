@@ -16,3 +16,9 @@ go run ./main.go
 go get github.com/go-chi/chi/v5
 go run ./api/main.go
 ```
+
+## Clone repository
+
+```bash
+git clone https://github.com/CelsiaInternet/taller.go.git go
+```
