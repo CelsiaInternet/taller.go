@@ -45,16 +45,9 @@ BRANCH=$(git branch --show-current)                             # Valor para val
 PRD=false
 
 if [ "$SERVICE" == "octopus" ]; then
-  PATH_URL="/octopus"
-  if [ "$DEPLOY" = true ]; then
-    VERSION="v1.0.54"
-  fi
+  PATH_URL="/octopus"  
 elif [ "$SERVICE" == "suspensiones" ]; then
-  PATH_URL="/suspensiones"
-  PATH_URL="/octopus/$SERVICE"
-  if [ "$DEPLOY" = true ]; then
-    VERSION="v1.0.60"
-  fi
+  PATH_URL="/suspensiones"  
 else
   PATH_URL="/octopus/$SERVICE"  
 fi
