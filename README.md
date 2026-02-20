@@ -21,4 +21,7 @@ go run ./api/main.go
 
 ```bash
 git clone https://github.com/CelsiaInternet/taller.go.git go
+git set develop
+git new <name>
+
 ```
