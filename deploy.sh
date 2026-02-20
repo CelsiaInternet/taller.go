@@ -2,85 +2,38 @@
 
 set -e                                                          # Salir si hay errores
 
-SERVICE=""
-HELP=false
-DEPLOY=false
-UNDO=false
-DELETE=false
-BUILD=false
-DEBUG=false
-BUILD_AND_DEPLOY=false
-REPLICAS=1
-
-# Parsear opciones
-while [[ "$#" -gt 0 ]]; do
-    case $1 in
-        --h | --help) HELP=true ;;                        # Activar la bandera si se proporciona --help
-        --d | --deploy) DEPLOY=true ;;                    # Activar la bandera si se proporciona --deploy
-        --u | --undo) UNDO=true ;;                        # Activar la bandera si se proporciona --undo
-        --delete) DELETE=true ;;                          # Activar la bandera si se proporciona --delete
-        --b | --build) BUILD=true ;;                      # Activar la bandera si se proporciona --build
-        --bd | --build-deploy) BUILD_AND_DEPLOY=true ;;   # Activar ambas banderas
-        --r | --replicas) REPLICAS="$2"; shift ;;         # Cambiar el número de réplicas
-        --debug) DEBUG=true ;;                            # Activar la bandera si se proporciona --debug
-        --s | --service) SERVICE="$2"; shift ;;           # Cambiar el nombre del servicio
-        *) echo "Opción desconocida: $1"; exit 1 ;;
-    esac
-    shift
-done
-
 # Variables de configuración
-COMPANY="celsia-internet"
 CURRENT_DATETIME=$(date '+%Y%m%d%H%M%S')                        # Fecha y hora actual
+TEMPLATE_FILE="./deployments/oke-template.yml"                  # Archivo de plantilla
 OUTPUT_FILE="./deployments/oke.yml"                             # Archivo de salida
 PORT=3300                                                       # Puerto de la aplicación
-HOST="http://service-$SERVICE"                                  # Host de la aplicación
-PATH_URL="/"                                                    # Ruta de la aplicación
-CMD="$SERVICE"                                                  # Comando de la aplicación
-APP="service-$SERVICE"                                          # Valor para reemplazar $ROLE
-IMAGE="celsiainternet/services-$SERVICE"                        # Valor $IMAGE
+HOST="/"                                                        # Host de la aplicación
+CMD="apigateway"                                                # Comando de la aplicación
+APP="apigateway"                                                # Valor para reemplazar $ROLE
+IMAGE="celsiainternet/apigateway"                               # Valor $IMAGE
 VERSION=$(git describe --tags --abbrev=0)                       # Valor para reemplazar $VERSION obtenido de Git
 RELEASE="$VERSION-$CURRENT_DATETIME"                            # Valor para reemplazar $RELEASE
-BRANCH=$(git branch --show-current)                             # Valor para validar el namespace
+BRANCH=$(git branch --show-current)                             # Valor para validar el NAMESPACE
 PRD=false
 
-if [ "$SERVICE" == "octopus" ]; then
-  PATH_URL="/octopus"  
-elif [ "$SERVICE" == "suspensiones" ]; then
-  PATH_URL="/suspensiones"  
-else
-  PATH_URL="/octopus/$SERVICE"  
-fi
-
 if [ "$BRANCH" == "main" ]; then
-    NAMESPACE="prd"    
+    NAMESPACE="prd"                                             # Valor para reemplazar $NS
     IMAGE_VERSION="$IMAGE:$VERSION"                             # Valor para reemplazar $IMAGE
     HISTORY_LIMIT=15                                            # Límite de historial de versiones
-    PRODUCTION=true                                             # Bandera para indicar que es producción
+    REPLICAS=3                                                  # Número de réplicas
+    PRODUCTION=true                                            # Bandera para indicar que es producción
     CPU_REQUEST="500m"                                          # CPU request
-    CPU_LIMIT="500m"                                            # CPU limit
-    MEMORY_REQUEST="512Mi"                                      # Memory request
-    MEMORY_LIMIT="1024Mi"                                       # Memory limit
+    CPU_LIMIT="1000m"                                            # CPU limit
+    MEMORY_REQUEST="1024Mi"                                      # Memory request
+    MEMORY_LIMIT="2048Mi"                                        # Memory limit
     MAX_PODS_AVAILABLE=1                                        # Número máximo de pods disponibles
     MAX_PODS_SURGE=1                                            # Número máximo de pods en exceso
-    TEMPLATE_FILE="./deployments/oke-template.yml"              # Archivo de plantilla
-    PRD=true                                                    # Flag par aindicar que el building es de prd
+    PRD=true
 elif [ "$BRANCH" == "develop" ]; then
     NAMESPACE="qa"                                              # Valor para reemplazar $NS
     IMAGE_VERSION="$IMAGE:$VERSION-alpha"                       # Valor para reemplazar $IMAGE
     HISTORY_LIMIT=3                                             # Límite de historial de versiones
-    PRODUCTION=false                                            # Bandera para indicar que es producción
-    CPU_REQUEST="50m"                                           # CPU request
-    CPU_LIMIT="100m"                                            # CPU limit
-    MEMORY_REQUEST="64Mi"                                       # Memory request
-    MEMORY_LIMIT="128Mi"                                        # Memory limit
-    MAX_PODS_AVAILABLE=1                                        # Número máximo de pods disponibles
-    MAX_PODS_SURGE=1                                            # Número máximo de pods en exceso    
-    TEMPLATE_FILE="./deployments/oke-statefulset-qa.yml"      # Archivo de plantilla
-else
-    NAMESPACE="dev"                                             # Valor para reemplazar $NS
-    IMAGE_VERSION="$IMAGE:$VERSION-beta"                        # Valor para reemplazar $IMAGE
-    HISTORY_LIMIT=1                                             # Límite de historial de versiones    
+    REPLICAS=1                                                  # Número de réplicas
     PRODUCTION=false                                            # Bandera para indicar que es producción
     CPU_REQUEST="50m"                                           # CPU request
     CPU_LIMIT="100m"                                            # CPU limit
@@ -88,8 +41,46 @@ else
     MEMORY_LIMIT="128Mi"                                        # Memory limit
     MAX_PODS_AVAILABLE=1                                        # Número máximo de pods disponibles
     MAX_PODS_SURGE=1                                            # Número máximo de pods en exceso
-    TEMPLATE_FILE="./deployments/oke-statefulset-dev.yml"      # Archivo de plantilla
+    KIND="StatefulSet"                                          # Tipo de objeto de Kubernetes
+    TEMPLATE_FILE="./deployments/oke-statefulset-template.yml"  # Archivo de plantilla
+else
+    NAMESPACE="dev"                                             # Valor para reemplazar $NS
+    IMAGE_VERSION="$IMAGE:$VERSION-beta"                        # Valor para reemplazar $IMAGE
+    HISTORY_LIMIT=1                                             # Límite de historial de versiones
+    REPLICAS=1                                                  # Número de réplicas
+    PRODUCTION=false                                            # Bandera para indicar que es producción
+    CPU_REQUEST="50m"                                           # CPU request
+    CPU_LIMIT="100m"                                            # CPU limit
+    MEMORY_REQUEST="256Mi"                                       # Memory request
+    MEMORY_LIMIT="512Mi"                                        # Memory limit
+    MAX_PODS_AVAILABLE=1                                        # Número máximo de pods disponibles
+    MAX_PODS_SURGE=1                                            # Número máximo de pods en exceso
+    KIND="StatefulSet"                                          # Tipo de objeto de Kubernetes
+    TEMPLATE_FILE="./deployments/oke-statefulset-template.yml"  # Archivo de plantilla
 fi
+
+HELP=false
+BUILD=false
+DEPLOY=false
+UNDO=false
+DELETE=false
+DEBUG=false
+
+# Parsear opciones
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --h | --help) HELP=true ;;                    # Activar la bandera si se proporciona --help
+        --d | --deploy) DEPLOY=true ;;                # Activar la bandera si se proporciona --deploy
+        --u | --undo) UNDO=true ;;                    # Activar la bandera si se proporciona --undo
+        --delete) DELETE=true ;;                      # Activar la bandera si se proporciona --delete
+        --b | --build) BUILD=true ;;                  # Activar la bandera si se proporciona --build
+        --r | --replicas) REPLICAS="$2"; shift ;;     # Cambiar el número de réplicas
+        --debug) DEBUG=true ;;                        # Activar la bandera si se proporciona --debug
+        --p | --production) PRODUCTION="$2"; shift ;; # Activar la bandera si se proporciona --production
+        *) echo "Opción desconocida: $1"; exit 1 ;;
+    esac
+    shift
+done
 
 # Mostrar las opciones elegidas
 echo "Opciones elegidas:"
@@ -101,19 +92,17 @@ echo "Opciones elegidas:"
 [[ "$PRODUCTION" == true ]] && echo " - Producción: Activado"
 [[ "$PRODUCTION" == false ]] && echo " - Producción: Desactivado"
 [[ "$DEBUG" == true ]] && echo " - Debug: Activado"
-[[ "$SERVICE" != "" ]] && echo " - Servicio: $SERVICE"
 
-# Función para mostrar el mensaje de ayuda
 help() {
   echo "Uso: deploy.sh [opciones]"
   echo "Opciones:"
   echo "  --h, --help: Muestra este mensaje de ayuda."
-  echo "  --d, --deploy --s, --service <service>: Despliega la aplicación en el clúster de Kubernetes."
-  echo "  --u, --undo --s, --service <service>: Deshace el despliegue de la aplicación en el clúster de Kubernetes."
-  echo "  --delete --s, --service <service>: Elimina el despliegue de la aplicación en el clúster de Kubernetes."
-  echo "  --b, --build --s, --service <service>: Construye la imagen de Docker de la aplicación."
-  echo "  --bd, --build-deploy --s, --service <service>: Construye y despliega la aplicación."
-  echo "  --r, --replicas --s, --service <service>: Cambia el número de réplicas de la aplicación."
+  echo "  --d, --deploy: Despliega la aplicación en el clúster de Kubernetes."
+  echo "  --u, --undo: Deshace el despliegue de la aplicación en el clúster de Kubernetes."
+  echo "  --delete: Elimina el despliegue de la aplicación en el clúster de Kubernetes."
+  echo "  --b, --build: Construye la imagen de Docker de la aplicación."
+  echo "  --r, --replicas: Cambia el número de réplicas de la aplicación."
+  echo "  --p, --production: Activa o desactiva el modo de producción."
   echo "  --debug: Activa el modo de depuración."
   exit 0
 }
@@ -126,7 +115,7 @@ build_image() {
   local tag_latest=$4
 
   # Si tag_latest es true, taggear como latest
-  if [ "$tag_latest" = true ]; then
+  if [ "$tag_latest" = true ]; then      
       docker buildx build --no-cache --platform "$platform" \
         -t "$IMAGE:latest" \
         -t "$image" \
@@ -152,55 +141,51 @@ apply_k8s() {
 }
 
 # Reemplazar valores en el archivo de plantilla y guardar en el archivo de salida
-create_manifest() {
-sed -e "s#\$PORT#$PORT#g" \
-    -e "s#\$HOST#$HOST#g" \
-    -e "s#\$PATH_URL#$PATH_URL#g" \
-    -e "s#\$REPLICAS#$REPLICAS#g" \
-    -e "s#\$COMPANY#$COMPANY#g" \
-    -e "s#\$PRODUCTION#$PRODUCTION#g" \
-    -e "s#\$DEBUG#$DEBUG#g" \
-    -e "s#\$ROLE#$APP#g" \
-    -e "s#\$NS#$NAMESPACE#g" \
-    -e "s#\$IMAGE#$IMAGE_VERSION#g" \
-    -e "s#\$CPU_REQUEST#$CPU_REQUEST#g" \
-    -e "s#\$CPU_LIMIT#$CPU_LIMIT#g" \
-    -e "s#\$MAX_PODS_AVAILABLE#$MAX_PODS_AVAILABLE#g" \
-    -e "s#\$MAX_PODS_SURGE#$MAX_PODS_SURGE#g" \
-    -e "s#\$MEMORY_REQUEST#$MEMORY_REQUEST#g" \
-    -e "s#\$MEMORY_LIMIT#$MEMORY_LIMIT#g" \
-    -e "s#\$HISTORY_LIMIT#$HISTORY_LIMIT#g" \
-    -e "s#\$RELEASE#$RELEASE#g" "$TEMPLATE_FILE" > "$OUTPUT_FILE"
+build_manifest() {
+  sed -e "s#\$PORT#$PORT#g" \
+      -e "s#\$HOST#$HOST#g" \
+      -e "s#\$REPLICAS#$REPLICAS#g" \
+      -e "s#\$PRODUCTION#$PRODUCTION#g" \
+      -e "s#\$DEBUG#$DEBUG#g" \
+      -e "s#\$ROLE#$APP#g" \
+      -e "s#\$NS#$NAMESPACE#g" \
+      -e "s#\$IMAGE#$IMAGE_VERSION#g" \
+      -e "s#\$CPU_REQUEST#$CPU_REQUEST#g" \
+      -e "s#\$CPU_LIMIT#$CPU_LIMIT#g" \
+      -e "s#\$MAX_PODS_AVAILABLE#$MAX_PODS_AVAILABLE#g" \
+      -e "s#\$MAX_PODS_SURGE#$MAX_PODS_SURGE#g" \
+      -e "s#\$MEMORY_REQUEST#$MEMORY_REQUEST#g" \
+      -e "s#\$MEMORY_LIMIT#$MEMORY_LIMIT#g" \
+      -e "s#\$HISTORY_LIMIT#$HISTORY_LIMIT#g" \
+      -e "s#\$RELEASE#$RELEASE#g" "$TEMPLATE_FILE" > "$OUTPUT_FILE"
 
-echo "Archivo $OUTPUT_FILE generado con éxito."
+  echo "Archivo $OUTPUT_FILE generado con éxito."
 }
 
 if [ "$HELP" = true ]; then
   help
-elif [ "$SERVICE" == "" ]; then
-  echo "Error: Debes especificar el nombre del servicio con la opción --service"
-  exit 1
 elif [ "$UNDO" = true ]; then
-  create_manifest
   kubectl rollout undo deployment "$APP" -n "$NAMESPACE"
-  kubectl -n "$namespace" get pods
+  kubectl -n "$NAMESPACE" get pods
   echo "Desplegado deshecho."
 elif [ "$BUILD" = true ]; then
   build_image "linux/amd64,linux/arm64" "$IMAGE_VERSION" "./cmd/$CMD/Dockerfile" $PRD
 elif [ "$DELETE" = true ]; then
-  create_manifest
+  build_manifest
   kubectl delete -f "$OUTPUT_FILE"
-  kubectl -n "$namespace" get all
+  kubectl -n "$NAMESPACE" get all
   echo "Despliegue eliminado."
 elif [ "$DEPLOY" = true ]; then
-  create_manifest
+  build_manifest
   apply_k8s "$NAMESPACE" "$OUTPUT_FILE"
-elif [ "$BUILD_AND_DEPLOY" = true ]; then
+elif [ "$BRANCH" == "main" ]; then
+  build_manifest
   build_image "linux/amd64,linux/arm64" "$IMAGE_VERSION" "./cmd/$CMD/Dockerfile" $PRD
-  create_manifest
   apply_k8s "$NAMESPACE" "$OUTPUT_FILE"
 else
-  help
+  build_manifest
+  build_image "linux/amd64,linux/arm64" "$IMAGE_VERSION" "./cmd/$CMD/Dockerfile" $PRD
+  apply_k8s "$NAMESPACE" "$OUTPUT_FILE"  
 fi
 
 # Línea en blanco al final
